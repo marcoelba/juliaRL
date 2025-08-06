@@ -1,0 +1,4 @@
+name = "juliaRL"
+uuid = "fcca0d18-2377-497a-9d9e-c70487caa949"
+authors = ["Marco Molinari <marco.molinari@medisin.uio.no>"]
+version = "0.1.0"
