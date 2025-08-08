@@ -16,18 +16,11 @@ const ACTIONS = [
 ]
 const ACTION_NAMES = ["↑", "↓", "←", "→"]
 
-# transition logic
-function move(state::Tuple{Int,Int}, action::Int)
-    x, y = state
-    dx, dy = ACTIONS[action]
-    new_x = clamp(x + dx, 1, GRID_SIZE[1])
-    new_y = clamp(y + dy, 1, GRID_SIZE[2])
-    return (new_x, new_y)
-end
 
 function is_terminal(state)
     return state == GOAL || state in CLIFFS
 end
+
 
 # reward function
 function get_reward(next_state)
@@ -51,6 +44,15 @@ function init_q_table()
     return q_table
 end
 
+# transition logic
+function move(state::Tuple{Int,Int}, action::Int)
+    x, y = state
+    dx, dy = ACTIONS[action]
+    new_x = clamp(x + dx, 1, GRID_SIZE[1])
+    new_y = clamp(y + dy, 1, GRID_SIZE[2])
+    return (new_x, new_y)
+end
+
 # ε-greedy action selection
 function select_action(q_table, state, ϵ)
     if rand() < ϵ
@@ -59,7 +61,7 @@ function select_action(q_table, state, ϵ)
         return argmax(q_table[state])   # Exploit
     end
 end
-
+    
 # Q-learning update
 function q_learning!(q_table, state, action, reward, next_state, α, γ)
     best_next_q = is_terminal(next_state) ? 0.0 : maximum(q_table[next_state])
@@ -109,7 +111,6 @@ end
 # Train and visualize
 q_table, rewards = train_agent(episodes=10000, γ=0.8)
 print_policy(q_table)
-q_table[(4, 3)]
 
 plot(rewards)
 
@@ -130,7 +131,7 @@ annotate!(GOAL[1]-0.5, GOAL[2]-0.5, text("GOAL", :blue, :center, 10))
 annotate!(CLIFFS[1][1]-0.5, CLIFFS[2][1]-0.5, text("CLIFF", :blue, :center, 10))
 annotate!(CLIFFS[2][1]-0.5, CLIFFS[2][2]-0.5, text("CLIFF", :blue, :center, 10))
 
-state = (1, 1)
+state = (4, 1)
 counter = 1
 annotate!(state[1]-0.5, state[2]-0.5, text(string(counter), :red, :center, 14))
 action = argmax(q_table[state])
