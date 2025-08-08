@@ -1,6 +1,7 @@
 # Grid world from scratch
-using Plots
+import Plots
 using Parameters
+using StatsFuns
 
 
 @with_kw struct Grid
@@ -16,16 +17,15 @@ using Parameters
 end
 
 
-grid = Grid(grid_size=(4, 4), goal=(4, 4), cliffs=[(2,3), (1,4)])
-grid.goal
-grid.grid_size
-grid.cliffs
+# grid = Grid(grid_size=(4, 4), goal=(4, 4), cliffs=[(2,3), (1,4)])
+# grid.goal
+# grid.grid_size
+# grid.cliffs
 
 
 function is_terminal(grid::Grid, state::Tuple{Int64, Int64})
     return state == grid.goal || state in grid.cliffs
 end
-is_terminal(grid, (4, 4))
 
 
 # reward function
@@ -38,15 +38,28 @@ function get_reward(grid::Grid, state::Tuple{Int64, Int64})
         return -1.0  # Step penalty
     end
 end
-get_reward(grid, (4, 4))
-get_reward(grid, (1, 4))
 
 # transition logic
-function move(grid::Grid, state::Tuple{Int,Int}, action::Int)
+function move(grid::Grid, state::Tuple{Int,Int}, action::Int, can_slip::Bool)
     x, y = state
+
     dx, dy = grid.actions[action]
     new_x = clamp(x + dx, 1, grid.grid_size[1])
     new_y = clamp(y + dy, 1, grid.grid_size[2])
+
+    if can_slip
+        # Stochastic slip (x% chance of random move)
+        if rand() < 0.1
+            setd = setdiff(1:length(grid.actions), action)
+            action_slip = rand(grid.actions[setd])
+            dx, dy = action_slip
+            new_x = clamp(x + dx, 1, grid.grid_size[1])
+            new_y = clamp(y + dy, 1, grid.grid_size[2])
+
+            return (new_x, new_y)
+        end
+    end
+
     return (new_x, new_y)
 end
 
@@ -60,7 +73,6 @@ function init_q_table(grid::Grid)
     end
     return q_table
 end
-q_table = init_q_table(grid::Grid)
 
 # ε-greedy action selection
 function select_action(q_table, state, ϵ)
@@ -84,7 +96,8 @@ function train_agent(;
     γ=0.9,
     ϵ_start=1.0,
     ϵ_end=0.01,
-    starting_state=(1, 1)
+    starting_state=(1, 1),
+    can_slip::Bool=false
     )
     q_table = init_q_table(grid)
     ϵ = ϵ_start
@@ -97,7 +110,7 @@ function train_agent(;
         current_reward = 0.0
         while !is_terminal(grid, state)
             action = select_action(q_table, state, ϵ)
-            next_state = move(grid, state, action)
+            next_state = move(grid, state, action,can_slip)
             reward = get_reward(grid, next_state)
             q_learning!(grid, q_table, state, action, reward, next_state, α, γ)
             state = next_state
@@ -129,7 +142,7 @@ end
 function print_path_grid(grid::Grid, q_table; starting_state=(1, 1))
 
     # grid
-    plt = plot(
+    plt = Plots.plot(
         grid=true,                     # Enable grid lines
         framestyle=:box,               # Full axis box
         xlabel="X axis", ylabel="Y axis",  # Axis labels
@@ -139,22 +152,35 @@ function print_path_grid(grid::Grid, q_table; starting_state=(1, 1))
         xlims=(0, grid.grid_size[1]), ylims=(0, grid.grid_size[2]), # Axis limits
         aspect_ratio=:equal
     )
-    annotate!(grid.goal[1]-0.5, grid.goal[2]-0.5, text("GOAL", :blue, :center, 8))
+    Plots.annotate!(grid.goal[1]-0.5, grid.goal[2]-0.5, Plots.text("GOAL", :blue, :center, 8))
     for cliff in grid.cliffs
-        annotate!(cliff[1]-0.5, cliff[2]-0.5, text("CLIFF", :blue, :center, 8))
+        Plots.annotate!(cliff[1]-0.5, cliff[2]-0.5, Plots.text("CLIFF", :blue, :center, 8))
     end
-    display(plt)
+    Plots.display(plt)
 
     # path
     counter = 1
-    annotate!(starting_state[1]-0.5, starting_state[2]-0.5, text("START", :red, :center, 8))
+    Plots.annotate!(starting_state[1]-0.5, starting_state[2]-0.5, Plots.text("START", :red, :center, 8))
     state = starting_state
     
     while !is_terminal(grid, state)
+
         action = argmax(q_table[state])
-        state = move(grid, state, action)
+        state = move(grid, state, action, false)
         counter += 1
-        annotate!(state[1]-0.5, state[2]-0.5, text(string(counter), :red, :center, 14))
+
+        # annotate!(state[1]-0.5, state[2]-0.5, text(string(counter), :red, :center, 14))
+        box_x = [state[1]-1, state[1], state[1], state[1]-1, state[1]-1]
+        box_y = [state[2]-1, state[2]-1, state[2], state[2], state[2]-1]
+
+        Plots.plot!(box_x, box_y, 
+            fill=true,           # Enable fill
+            fillalpha=0.8,       # Transparency (0=invisible, 1=opaque)
+            fillcolor="red", # Shade color
+            label=false,
+            linecolor=false,    # Border color
+            linewidth=0,         # Border thickness
+        )
     end
 
     display(plt)
@@ -166,10 +192,21 @@ end
 # -------------------------------------------------
 
 # Train and visualize
-grid = Grid(grid_size=(8, 8), goal=(7, 8), cliffs=[(2,3), (1,4), (5,6)])
-q_table, rewards = train_agent(grid=grid, episodes=10000, γ=0.8)
+grid = Grid(
+    grid_size=(8, 8),
+    goal=(7, 8),
+    cliffs=[(2,3), (1,4), (5,6), (6,4)],
+    can_slip=true
+)
+q_table, rewards = train_agent(grid=grid, episodes=10000, γ=0.9)
 print_policy(grid, q_table)
+Plots.plot(rewards)
 
-plot(rewards)
+norm_table = init_q_table(grid)
+for (ii, key) in enumerate(keys(norm_table))
+    norm_table[key] = softmax(q_table[key])
+end
 
-print_path_grid(grid, q_table, starting_state=(1, 1))
+print_path_grid(q_grid, q_table, starting_state=(1, 2))
+print_path_grid(q_grid, norm_table, starting_state=(1, 1))
+
