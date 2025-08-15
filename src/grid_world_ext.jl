@@ -33,7 +33,7 @@ function get_reward(grid::Grid, state::Tuple{Int64, Int64})
     if state == grid.goal
         return 10.0
     elseif state in grid.cliffs
-        return -10.0
+        return -50.0
     else
         return -1.0  # Step penalty
     end
@@ -195,10 +195,9 @@ end
 grid = Grid(
     grid_size=(8, 8),
     goal=(7, 8),
-    cliffs=[(2,3), (1,4), (5,6), (6,4)],
-    can_slip=true
+    cliffs=[(2,3), (1,4), (5,6), (6,4)]
 )
-q_table, rewards = train_agent(grid=grid, episodes=10000, γ=0.9)
+q_table, rewards = train_agent(grid=grid, episodes=10000, γ=0.9, can_slip=true)
 print_policy(grid, q_table)
 Plots.plot(rewards)
 
@@ -207,6 +206,6 @@ for (ii, key) in enumerate(keys(norm_table))
     norm_table[key] = softmax(q_table[key])
 end
 
-print_path_grid(q_grid, q_table, starting_state=(1, 2))
-print_path_grid(q_grid, norm_table, starting_state=(1, 1))
+print_path_grid(grid, q_table, starting_state=(1, 1))
+print_path_grid(grid, norm_table, starting_state=(1, 1))
 
